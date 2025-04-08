@@ -31,6 +31,7 @@ CLOUD = pygame.image.load(os.path.join("Assets/Other", "Cloud.png"))
 BG = pygame.image.load(os.path.join("Assets/Other", "Track.png"))
 GAMEOVER = pygame.image.load(os.path.join("Assets/Other", "GameOver.png"))
 RESET = pygame.image.load(os.path.join("Assets/Other", "Reset.png"))
+FIRST_OBSTACLES = []
 
 
 class Dinosaur:
@@ -170,15 +171,26 @@ class Bird(Obstacle):
 
 
 def spawn_obstacles(obstacle_list):
-    choice = random.randint(0, 1)
-    if choice == 0:
-        cactus_choice = random.randint(0, 1)
-        if cactus_choice == 0:
+    global FIRST_OBSTACLES
+
+    if FIRST_OBSTACLES:
+        next_type = FIRST_OBSTACLES.pop(0)
+        if next_type == 0:
             obstacle_list.append(SmallCactus(SMALL_CACTUS))
-        elif cactus_choice == 1:
+        elif next_type == 1:
             obstacle_list.append(LargeCactus(LARGE_CACTUS))
-    elif choice == 1:
-        obstacle_list.append(Bird(BIRD))
+        else:
+            obstacle_list.append(Bird(BIRD))
+    else:
+        choice = random.randint(0, 1)
+        if choice == 0:
+            cactus_choice = random.randint(0, 1)
+            if cactus_choice == 0:
+                obstacle_list.append(SmallCactus(SMALL_CACTUS))
+            elif cactus_choice == 1:
+                obstacle_list.append(LargeCactus(LARGE_CACTUS))
+        elif choice == 1:
+            obstacle_list.append(Bird(BIRD))
 
 
 def update_background(screen, bg_img, x_bg, y_bg, speed):
@@ -204,7 +216,8 @@ def update_score(points, speed, font, screen, x=1000, y=40):
 
 
 def manual_main():
-    global obstacles
+    global obstacles, FIRST_OBSTACLES
+    FIRST_OBSTACLES = [2, 0, 1]
 
     run = True
     clock = pygame.time.Clock()
@@ -258,6 +271,113 @@ def manual_main():
         clock.tick(60)
         pygame.display.update()
 
+def ai_main():
+    global FIRST_OBSTACLES
+    FIRST_OBSTACLES = [0, 1, 2] 
+
+    local_dir = os.path.dirname(__file__)
+    config_path = os.path.join(local_dir, "config-feedforward.txt")
+    config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
+                         neat.DefaultSpeciesSet, neat.DefaultStagnation,
+                         config_path)
+    with open("best_genome.pkl", "rb") as f:
+        best_genome = pickle.load(f)
+    
+    net = neat.nn.FeedForwardNetwork.create(best_genome, config)
+
+    clock = pygame.time.Clock()
+    speed = 10
+    x_pos_bg = 0
+    y_pos_bg = 380
+    obstacles = []
+    points = 0
+    font = pygame.font.Font(os.path.join("Assets/Other", "Munro.ttf"), 20)
+
+    user_dino = Dinosaur()
+    ai_dino = Dinosaur()
+
+    user_alive = True
+    ai_alive = True
+
+    run = True
+    while run:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+
+        SCREEN.fill((255, 255, 255))
+        userInput = pygame.key.get_pressed()
+
+        if user_alive:
+            if user_dino.dino_jump:
+                act_user = 1
+            elif userInput[pygame.K_UP] or userInput[pygame.K_SPACE]:
+                act_user = 1
+            elif userInput[pygame.K_DOWN]:
+                act_user = 2
+            else:
+                act_user = 0
+        else:
+            act_user = 0 
+
+        user_dino.update(act_user, speed)
+
+        if ai_alive:
+            if obstacles:
+                obstacle = obstacles[0]
+                dist_x = obstacle.rect.x - ai_dino.dino_rect.x
+                dist_y = obstacle.rect.y
+                if (obstacle.species == 2):
+                    isBird = True
+                else:
+                    isBird = False
+            else:
+                dist_x = 1000000
+                dist_y = 0
+                isBird = False
+
+            ai_inputs = (ai_dino.dino_rect.y, dist_x, dist_y, speed, ai_dino.dino_duck, isBird)
+            output = net.activate(ai_inputs)
+            act_ai = np.argmax(output)
+        else:
+            act_ai = 0 
+
+        ai_dino.update(act_ai, speed)
+
+        if user_alive:
+            user_dino.draw(SCREEN)
+        if ai_alive:
+            ai_dino.draw(SCREEN)
+
+        if len(obstacles) == 0:
+            spawn_obstacles(obstacles)
+
+        for obstacle in obstacles:
+            obstacle.draw(SCREEN)
+            obstacle.update(speed, obstacles)
+
+            if user_alive:
+                if user_dino.dino_rect.colliderect(obstacle.rect) or \
+                   (user_dino.dino_rect.x > obstacle.rect.x and obstacle.rect.y == 245 and not user_dino.dino_duck):
+                    user_alive = False
+
+            if ai_alive:
+                if ai_dino.dino_rect.colliderect(obstacle.rect) or \
+                   (ai_dino.dino_rect.x > obstacle.rect.x and obstacle.rect.y == 245 and not ai_dino.dino_duck):
+                    ai_alive = False
+
+        x_pos_bg = update_background(SCREEN, BG, x_pos_bg, y_pos_bg, speed)
+        points, speed = update_score(points, speed, font, SCREEN)
+
+        if not user_alive:
+            run = False
+
+        clock.tick(60)
+        pygame.display.update()
+
+    menu(True, points)
+
 
 def menu(is_death, score):
     run = True
@@ -269,6 +389,12 @@ def menu(is_death, score):
             r = t.get_rect()
             r.center = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 25)
             SCREEN.blit(t, r)
+
+            f_small = pygame.font.Font(os.path.join("Assets/Other", "Munro.ttf"), 20)
+            t_small = f_small.render("PRESS A TO PLAY AGAINST AI", True, (60, 64, 67))
+            r_small = t_small.get_rect()
+            r_small.center = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 25)
+            SCREEN.blit(t_small, r_small)
         else:
             f = pygame.font.Font(os.path.join("Assets/Other", "Munro.ttf"), 20)
             w1 = GAMEOVER.get_width()
@@ -288,27 +414,27 @@ def menu(is_death, score):
             if event.type == pygame.QUIT:
                 pygame.quit()
                 run = False
-            if event.type == pygame.KEYDOWN or event.type == pygame.MOUSEBUTTONDOWN:
-                manual_main()
+            if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_SPACE:
+                        manual_main()
+                    elif event.key == pygame.K_a:
+                        ai_main()
 
 
 def eval_genomes(genomes, config):
-
-    def one_hot_encode(value, categories):
-        one_hot = [1 if value == cat else 0 for cat in categories]
-        return one_hot
-    
-    def standardize(x, mean, std):
-        return (x - mean) / std if std > 0 else 0
+    global FIRST_OBSTACLES
+    FIRST_OBSTACLES = [2, 0, 1]
 
     neural_nets = []
     dinosaurs = []
+    ge = []
 
-    for _, genome in genomes:
+    for genome_id, genome in genomes:
         neural_net = neat.nn.FeedForwardNetwork.create(genome, config)
         neural_nets.append(neural_net)
         dinosaurs.append(Dinosaur())
         genome.fitness = 0
+        ge.append(genome)
 
     clock = pygame.time.Clock()
     speed = 10
@@ -318,12 +444,6 @@ def eval_genomes(genomes, config):
     points = 0
     font = pygame.font.Font(os.path.join("Assets/Other", "Munro.ttf"), 20)
 
-    mean_std = {
-    "dino_y": (215, 62.5),
-    "dist_x": (448, 286),
-    "speed": (20, 5)  
-    }
-
     run = True
     while run and len(dinosaurs) > 0:
         for event in pygame.event.get():
@@ -332,7 +452,6 @@ def eval_genomes(genomes, config):
                 sys.exit()
 
         SCREEN.fill((255, 255, 255))
-
         x_pos_bg = update_background(SCREEN, BG, x_pos_bg, y_pos_bg, speed)
 
         if len(obstacles) == 0:
@@ -341,21 +460,21 @@ def eval_genomes(genomes, config):
         if len(obstacles) > 0:
             obstacle = obstacles[0]
             dist_x = obstacle.rect.x
-            obstacle_type = obstacle.species
+            obs_y = obstacle.rect.y
+            if (obstacle.species == 2):
+                isBird = True
+            else:
+                isBird = False
         else:
             dist_x = 1000000
-            obstacle_type = 3
+            obs_y = 0
+            isBird = False
 
         for i, dino in enumerate(dinosaurs):
             dino_y = dino.dino_rect.y
-            dist_x = dist_x - dino.dino_rect.x
+            dist_x_adj = dist_x - dino.dino_rect.x
 
-            normalized_dino_y = standardize(dino_y, *mean_std["dino_y"])
-            normalized_dist_x = standardize(dist_x, *mean_std["dist_x"])
-            normalized_speed = standardize(speed, *mean_std["speed"])
-            obstacle_type = one_hot_encode(obstacle_type, [0, 1, 2, 3])
-
-            inputs = (normalized_dino_y, normalized_dist_x, normalized_speed) + tuple(obstacle_type)
+            inputs = (dino_y, dist_x_adj, obs_y, speed, dino.dino_duck, isBird)
             output = neural_nets[i].activate(inputs)
             act = np.argmax(output)
             dino.update(act, speed)
@@ -364,15 +483,19 @@ def eval_genomes(genomes, config):
         for obstacle in obstacles:
             obstacle.draw(SCREEN)
             obstacle.update(speed, obstacles)
-            for i, dino in enumerate(dinosaurs):
-                if dino.dino_rect.colliderect(obstacle.rect) or \
-                   (dino.dino_rect.x >= obstacle.rect.x and obstacle.rect.y == 245 and not dino.dino_duck):
-                    genomes[i][1].fitness -= 1
-                    dinosaurs.pop(i)
-                    neural_nets.pop(i)
-                    break
-                else:
-                    genomes[i][1].fitness += 0.1
+
+        to_remove = []
+        for i, dino in enumerate(dinosaurs):
+            if (dino.dino_rect.colliderect(obstacle.rect) or (dino.dino_rect.x >= obstacle.rect.x and obstacle.rect.y == 245 and not dino.dino_duck)):
+                to_remove.append(i)
+            else:
+                ge[i].fitness += 0.1
+
+        for i in reversed(to_remove):
+            ge[i].fitness -= 50
+            dinosaurs.pop(i)
+            neural_nets.pop(i)
+            ge.pop(i)
 
         points, speed = update_score(points, speed, font, SCREEN)
 
@@ -387,7 +510,8 @@ def run_neat(config_path):
     p.add_reporter(neat.StdOutReporter(True))
     stats = neat.StatisticsReporter()
     p.add_reporter(stats)
-    winner = p.run(eval_genomes, 1000)
+
+    winner = p.run(eval_genomes, 10000)
     with open("best_genome.pkl", "wb") as f:
         pickle.dump(winner, f)
 
