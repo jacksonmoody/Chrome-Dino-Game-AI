@@ -35,6 +35,7 @@ RESET = pygame.image.load(os.path.join("Assets/Other", "Reset.png"))
 # Used to ensure that all obstacles are spawned first before randomizing (helps with AI learning)
 FIRST_OBSTACLES = []
 
+# Dinosaur class (main character or AI agent)
 class Dinosaur:
     X_POS = 80
     Y_POS = 310
@@ -109,7 +110,7 @@ class Dinosaur:
     def draw(self, screen):
         screen.blit(self.image, (self.dino_rect.x, self.dino_rect.y))
 
-
+# Clouds just to make it look pretty haha
 class Cloud:
     def __init__(self):
         self.x = SCREEN_WIDTH + random.randint(800, 1000)
@@ -126,7 +127,7 @@ class Cloud:
     def draw(self, screen):
         screen.blit(self.image, (self.x, self.y))
 
-
+# Generic obstacle class (used for small cactus, large cactus, and birds)
 class Obstacle:
     def __init__(self, image, t, species):
         self.image = image
@@ -172,7 +173,6 @@ class Bird(Obstacle):
 
 # Spawn all obstacles in FIRST_OBSTACLES first, then randomize:
 # 25% chance of small cactus, 25% chance of large cactus, 50% chance of bird
-
 def spawn_obstacles(obstacle_list):
     global FIRST_OBSTACLES
 
@@ -195,7 +195,7 @@ def spawn_obstacles(obstacle_list):
         elif choice == 1:
             obstacle_list.append(Bird(BIRD))
 
-
+# Move background image at speed
 def update_background(screen, bg_img, x_bg, y_bg, speed):
     w = bg_img.get_width()
     screen.blit(bg_img, (x_bg, y_bg))
@@ -205,7 +205,7 @@ def update_background(screen, bg_img, x_bg, y_bg, speed):
         x_bg = 0
     return x_bg
 
-
+# Runs at every frame (score increases very quickly)
 def update_score(points, speed, font, screen, x=1000, y=40):
     points += 1
     if points % 200 == 0: # Increase game speed over time
@@ -240,13 +240,13 @@ def manual_main():
                 run = False
 
         SCREEN.fill((255, 255, 255))
-        userInput = pygame.key.get_pressed()
+        user_input = pygame.key.get_pressed()
 
         if player.dino_jump:
             act = 1
-        elif userInput[pygame.K_UP] or userInput[pygame.K_SPACE]:
+        elif user_input[pygame.K_UP] or user_input[pygame.K_SPACE]:
             act = 1
-        elif userInput[pygame.K_DOWN]:
+        elif user_input[pygame.K_DOWN]:
             act = 2
         else:
             act = 0
@@ -312,14 +312,14 @@ def ai_main():
                 sys.exit()
 
         SCREEN.fill((255, 255, 255))
-        userInput = pygame.key.get_pressed()
+        user_input = pygame.key.get_pressed()
 
         if user_alive:
             if user_dino.dino_jump:
                 act_user = 1
-            elif userInput[pygame.K_UP] or userInput[pygame.K_SPACE]:
+            elif user_input[pygame.K_UP] or user_input[pygame.K_SPACE]:
                 act_user = 1
-            elif userInput[pygame.K_DOWN]:
+            elif user_input[pygame.K_DOWN]:
                 act_user = 2
             else:
                 act_user = 0
@@ -334,17 +334,17 @@ def ai_main():
                 dist_x = obstacle.rect.x - ai_dino.dino_rect.x
                 dist_y = obstacle.rect.y
                 if (obstacle.species == 2):
-                    isBird = True
+                    is_bird = True
                 else:
-                    isBird = False
+                    is_bird = False
             else:
                 dist_x = 1000000
                 dist_y = 0
-                isBird = False
+                is_bird = False
 
             # AI takes dinosaur position, horizontal distance to nearest obstacle, height of nearest obstacle, game speed, whether the dino is ducking/jumping, and whether the obstacle is a bird as input
             ai_inputs = (ai_dino.dino_rect.y, dist_x, dist_y,
-                         speed, ai_dino.dino_duck, isBird)
+                         speed, ai_dino.dino_duck, is_bird)
             
             output = net.activate(ai_inputs)
 
@@ -477,20 +477,20 @@ def eval_genomes(genomes, config):
             dist_x = obstacle.rect.x
             obs_y = obstacle.rect.y
             if (obstacle.species == 2):
-                isBird = True
+                is_bird = True
             else:
-                isBird = False
+                is_bird = False
         else:
             dist_x = 1000000
             obs_y = 0
-            isBird = False
+            is_bird = False
 
         # Feed inputs into each dinosaur neural network and take the appropriate actions
         for i, dino in enumerate(dinosaurs):
             dino_y = dino.dino_rect.y
             dist_x_adj = dist_x - dino.dino_rect.x
 
-            inputs = (dino_y, dist_x_adj, obs_y, speed, dino.dino_duck, isBird)
+            inputs = (dino_y, dist_x_adj, obs_y, speed, dino.dino_duck, is_bird)
             output = neural_nets[i].activate(inputs)
             act = np.argmax(output)
             dino.update(act, speed)
