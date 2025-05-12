@@ -6,6 +6,7 @@ import pickle
 import sys
 import numpy as np
 
+# Game Initialization
 pygame.init()
 pygame.display.set_caption("Jackson Moody Neuro 140 Project")
 SCREEN_HEIGHT = 600
@@ -31,8 +32,8 @@ CLOUD = pygame.image.load(os.path.join("Assets/Other", "Cloud.png"))
 BG = pygame.image.load(os.path.join("Assets/Other", "Track.png"))
 GAMEOVER = pygame.image.load(os.path.join("Assets/Other", "GameOver.png"))
 RESET = pygame.image.load(os.path.join("Assets/Other", "Reset.png"))
+# Used to ensure that all obstacles are spawned first before randomizing (helps with AI learning)
 FIRST_OBSTACLES = []
-
 
 class Dinosaur:
     X_POS = 80
@@ -169,6 +170,8 @@ class Bird(Obstacle):
         screen.blit(self.image[self.index // 5], self.rect)
         self.index += 1
 
+# Spawn all obstacles in FIRST_OBSTACLES first, then randomize:
+# 25% chance of small cactus, 25% chance of large cactus, 50% chance of bird
 
 def spawn_obstacles(obstacle_list):
     global FIRST_OBSTACLES
@@ -205,7 +208,7 @@ def update_background(screen, bg_img, x_bg, y_bg, speed):
 
 def update_score(points, speed, font, screen, x=1000, y=40):
     points += 1
-    if points % 200 == 0:
+    if points % 200 == 0: # Increase game speed over time
         speed += 1
 
     text = font.render("POINTS: " + str(points), True, (60, 64, 67))
@@ -214,7 +217,7 @@ def update_score(points, speed, font, screen, x=1000, y=40):
     screen.blit(text, rect)
     return points, speed
 
-
+# Used for manually playing the game (no AI)
 def manual_main():
     global obstacles, FIRST_OBSTACLES
     FIRST_OBSTACLES = [2, 0, 1]
@@ -271,9 +274,11 @@ def manual_main():
         clock.tick(60)
         pygame.display.update()
 
+# Used when playing against an AI agent
+## TODO: Merge with manual_main() to reduce code duplication
 def ai_main():
     global FIRST_OBSTACLES
-    FIRST_OBSTACLES = [0, 1, 2] 
+    FIRST_OBSTACLES = [0, 1, 2]
 
     local_dir = os.path.dirname(__file__)
     config_path = os.path.join(local_dir, "config-feedforward.txt")
@@ -282,7 +287,7 @@ def ai_main():
                          config_path)
     with open("best_genome.pkl", "rb") as f:
         best_genome = pickle.load(f)
-    
+
     net = neat.nn.FeedForwardNetwork.create(best_genome, config)
 
     clock = pygame.time.Clock()
@@ -319,7 +324,7 @@ def ai_main():
             else:
                 act_user = 0
         else:
-            act_user = 0 
+            act_user = 0
 
         user_dino.update(act_user, speed)
 
@@ -337,11 +342,16 @@ def ai_main():
                 dist_y = 0
                 isBird = False
 
-            ai_inputs = (ai_dino.dino_rect.y, dist_x, dist_y, speed, ai_dino.dino_duck, isBird)
+            # AI takes dinosaur position, horizontal distance to nearest obstacle, height of nearest obstacle, game speed, whether the dino is ducking/jumping, and whether the obstacle is a bird as input
+            ai_inputs = (ai_dino.dino_rect.y, dist_x, dist_y,
+                         speed, ai_dino.dino_duck, isBird)
+            
             output = net.activate(ai_inputs)
+
+            # Take the action with the highest output
             act_ai = np.argmax(output)
         else:
-            act_ai = 0 
+            act_ai = 0
 
         ai_dino.update(act_ai, speed)
 
@@ -370,6 +380,7 @@ def ai_main():
         x_pos_bg = update_background(SCREEN, BG, x_pos_bg, y_pos_bg, speed)
         points, speed = update_score(points, speed, font, SCREEN)
 
+        # Only play when the user is alive (AI will probably always be alive lol)
         if not user_alive:
             run = False
 
@@ -379,6 +390,7 @@ def ai_main():
     menu(True, points)
 
 
+# Start menu
 def menu(is_death, score):
     run = True
     while run:
@@ -390,8 +402,10 @@ def menu(is_death, score):
             r.center = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 25)
             SCREEN.blit(t, r)
 
-            f_small = pygame.font.Font(os.path.join("Assets/Other", "Munro.ttf"), 20)
-            t_small = f_small.render("PRESS A TO PLAY AGAINST AI", True, (60, 64, 67))
+            f_small = pygame.font.Font(
+                os.path.join("Assets/Other", "Munro.ttf"), 20)
+            t_small = f_small.render(
+                "PRESS A TO PLAY AGAINST AI", True, (60, 64, 67))
             r_small = t_small.get_rect()
             r_small.center = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 25)
             SCREEN.blit(t_small, r_small)
@@ -415,12 +429,12 @@ def menu(is_death, score):
                 pygame.quit()
                 run = False
             if event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_SPACE:
-                        manual_main()
-                    elif event.key == pygame.K_a:
-                        ai_main()
+                if event.key == pygame.K_SPACE:
+                    manual_main()
+                elif event.key == pygame.K_a:
+                    ai_main()
 
-
+# Core loop for NEAT algorithm
 def eval_genomes(genomes, config):
     global FIRST_OBSTACLES
     FIRST_OBSTACLES = [2, 0, 1]
@@ -429,6 +443,7 @@ def eval_genomes(genomes, config):
     dinosaurs = []
     ge = []
 
+    # Initialize a dinosaur and neural network for each genome
     for genome_id, genome in genomes:
         neural_net = neat.nn.FeedForwardNetwork.create(genome, config)
         neural_nets.append(neural_net)
@@ -470,6 +485,7 @@ def eval_genomes(genomes, config):
             obs_y = 0
             isBird = False
 
+        # Feed inputs into each dinosaur neural network and take the appropriate actions
         for i, dino in enumerate(dinosaurs):
             dino_y = dino.dino_rect.y
             dist_x_adj = dist_x - dino.dino_rect.x
@@ -484,15 +500,17 @@ def eval_genomes(genomes, config):
             obstacle.draw(SCREEN)
             obstacle.update(speed, obstacles)
 
-        to_remove = []
+        # Update dinosaurs after collisions
+        to_remove = [] # Many dinosaurs may be removed at once, so store in an array
         for i, dino in enumerate(dinosaurs):
             if (dino.dino_rect.colliderect(obstacle.rect) or (dino.dino_rect.x >= obstacle.rect.x and obstacle.rect.y == 245 and not dino.dino_duck)):
                 to_remove.append(i)
             else:
                 ge[i].fitness += 0.1
 
+        # Update fitness before removing from ge array (used by NEAT algorihtm)
         for i in reversed(to_remove):
-            ge[i].fitness -= 50
+            ge[i].fitness -= 50 # TODO: Maybe tune this?
             dinosaurs.pop(i)
             neural_nets.pop(i)
             ge.pop(i)
@@ -511,15 +529,15 @@ def run_neat(config_path):
     stats = neat.StatisticsReporter()
     p.add_reporter(stats)
 
-    winner = p.run(eval_genomes, 10000)
+    winner = p.run(eval_genomes, 10000) # Run for 10,000 generations (algorithm will hopefully terminate at fitness_threshold = 400 first)
     with open("best_genome.pkl", "wb") as f:
-        pickle.dump(winner, f)
+        pickle.dump(winner, f) # Save best trained genome for playing against later
 
 
 if __name__ == "__main__":
     local_dir = os.path.dirname(__file__)
     config_file = os.path.join(local_dir, "config-feedforward.txt")
-    if len(sys.argv) > 1 and sys.argv[1].lower() == "train":
+    if len(sys.argv) > 1 and sys.argv[1].lower() == "train": # Usage: python3 main.py train
         run_neat(config_file)
     else:
-        menu(False, 0)
+        menu(False, 0) # Usage: python3 main.py
