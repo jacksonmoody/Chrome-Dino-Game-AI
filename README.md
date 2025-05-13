@@ -35,4 +35,4 @@ This will start the NEAT algorithm and train a new genome. The best genome will 
 The config file `config-feedforward.txt` is used to configure the NEAT algorithm. It contains the parameters for the neural network and the evolution process. You can modify the parameters to change the evolution of the algorithm, including the activation function used. The default parameters should work well for most cases.
 
 ## Final Report
-See [here](https://docs.google.com/document/d/1Ymk62-esCarto7vAbFlDCTFb6k-0kSuHs9GPJXEtUsg/edit?usp=sharing) for the full report on this project, including a literature review, specific methodology, results, and conclusions. 
+See [here](https://docs.google.com/document/d/1UrbCZowDyapEftFRjOXuyhf3SVZcR9ZgCfA6XGTQQUs/edit?usp=sharing) for the full report on this project, including a literature review, specific methodology, results, and conclusions. 
